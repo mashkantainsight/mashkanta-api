@@ -1,41 +1,39 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse/lib/pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+export const runtime = "edge";
 
-const GROQ_KEY = process.env.GROQ_API_KEY!;
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GEMINI_KEY = process.env.GEMINI_API_KEY!;
+const GEMINI_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+  GEMINI_KEY;
 
-const PROMPT = `Analyze Israeli mortgage PDF text. Return ONLY valid JSON, no markdown.
+const PROMPT = `אתה מנתח מסמכי משכנתא ישראליים.
+המסמך המצורף הוא "אישור יתרות לסילוק" מבנק ישראלי.
+חלץ את כל הנתונים והחזר JSON בלבד — ללא markdown, ללא הסברים.
 
 {
-  "bankName": "<bank name in Hebrew>",
-  "currentBalance": <number>,
-  "originalAmount": <number>,
-  "weightedIRR": <decimal>,
-  "currentMonthlyPayment": <number>,
-  "peakMonthlyPayment": <number>,
-  "remainingYears": <number>,
-  "principalRemaining": <number>,
-  "interestRemaining": <number>,
-  "tracks": [{"type":"<Hebrew name>","balance":<number>,"interestRate":<decimal>,"remainingMonths":<number>,"monthlyPayment":<number>}],
-  "forecast": [{"year":"<YYYY>","payment":<number>}]
+  "bankName":              "<שם הבנק בעברית כפי שמופיע בכותרת>",
+  "currentBalance":        <יתרת קרן נוכחית, מספר שלם>,
+  "originalAmount":        <סכום הלוואה מקורי, מספר שלם>,
+  "weightedIRR":           <ריבית שנתית משוקללת, עשרוני>,
+  "currentMonthlyPayment": <החזר חודשי נוכחי, מספר שלם>,
+  "peakMonthlyPayment":    <החזר חודשי מקסימלי, מספר שלם>,
+  "remainingYears":        <שנים נותרות, מספר שלם>,
+  "principalRemaining":    <קרן נותרת, מספר שלם>,
+  "interestRemaining":     <ריבית נותרת, מספר שלם>,
+  "tracks": [
+    {
+      "type":            "<שם המסלול>",
+      "balance":         <יתרה, שלם>,
+      "interestRate":    <ריבית, עשרוני>,
+      "remainingMonths": <חודשים נותרים, שלם>,
+      "monthlyPayment":  <החזר חודשי, שלם>
+    }
+  ],
+  "forecast": [
+    { "year": "<YYYY>", "payment": <תשלום חודשי, שלם> }
+  ]
 }
 
-forecast: one row per year for next 5 years only. JSON only.`;
-
-function extractFinancialLines(raw: string): string {
-  const cleaned = raw
-    .replace(/[^\u0020-\u007E\u05D0-\u05EA\n]/g, " ")
-    .replace(/[ \t]{2,}/g, " ");
-
-  const lines = cleaned.split("\n").map((l) => l.trim()).filter(Boolean);
-
-  const relevant = lines.filter((l) =>
-    /\d{3,}/.test(l) || // any line with a 3+ digit number
-    /יתרה|ריבית|קרן|מסלול|תשלום|הלוואה|סכום|בנק|פריים|קבועה|משתנה|זכאות|מדד/.test(l)
-  );
-
-  return relevant.slice(0, 100).join("\n").slice(0, 2500);
-}
+חוקים: forecast = שורה לכל שנה עד סיום. JSON תקני בלבד ללא \`\`\`.`;
 
 function cors(origin: string) {
   return {
@@ -53,39 +51,34 @@ export async function POST(request: Request) {
       return Response.json({ error: "No PDF" }, { status: 400, headers: cors(origin) });
     }
 
-    const buffer = Buffer.from(pdfBase64, "base64");
-    const parsed = await pdfParse(buffer);
-    const pdfText = extractFinancialLines(parsed.text || "");
+    const body = JSON.stringify({
+      contents: [{ parts: [
+        { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
+        { text: PROMPT },
+      ]}],
+      generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
+    });
 
-    if (!pdfText) {
+    const resp = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+
+    if (resp.status === 429) {
       return Response.json(
-        { error: "לא ניתן לחלץ טקסט מהקובץ. האם הקובץ סרוק? אנא נסה PDF מבנק." },
-        { status: 422, headers: cors(origin) }
+        { error: "השרת עמוס כרגע. אנא המתן מספר דקות ונסה שוב." },
+        { status: 429, headers: cors(origin) }
       );
     }
 
-    const resp = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        messages: [{ role: "user", content: PROMPT + "\n\nPDF TEXT:\n" + pdfText }],
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-        max_tokens: 2048,
-      }),
-    });
-
     if (!resp.ok) {
       const txt = await resp.text();
-      return Response.json({ error: `Groq ${resp.status}`, details: txt }, { status: 502, headers: cors(origin) });
+      return Response.json({ error: `Gemini ${resp.status}`, details: txt }, { status: 502, headers: cors(origin) });
     }
 
     const data = await resp.json();
-    const raw = data.choices[0].message.content as string;
+    const raw = data.candidates[0].content.parts[0].text as string;
     const analysis = JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
     return Response.json(analysis, { headers: cors(origin) });
