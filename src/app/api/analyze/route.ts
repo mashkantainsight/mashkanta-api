@@ -4,35 +4,38 @@ const pdfParse = require("pdf-parse/lib/pdf-parse") as (buf: Buffer) => Promise<
 const GROQ_KEY = process.env.GROQ_API_KEY!;
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-const PROMPT = `אתה מנתח מסמכי משכנתא ישראליים.
-להלן טקסט שחולץ מ"אישור יתרות לסילוק" מבנק ישראלי.
-חלץ את כל הנתונים והחזר JSON בלבד — ללא markdown, ללא הסברים.
+const PROMPT = `Analyze Israeli mortgage PDF text. Return ONLY valid JSON, no markdown.
 
 {
-  "bankName":              "<שם הבנק בעברית>",
-  "currentBalance":        <יתרת קרן נוכחית, מספר שלם>,
-  "originalAmount":        <סכום הלוואה מקורי, מספר שלם>,
-  "weightedIRR":           <ריבית שנתית משוקללת, עשרוני>,
-  "currentMonthlyPayment": <החזר חודשי נוכחי, מספר שלם>,
-  "peakMonthlyPayment":    <החזר חודשי מקסימלי, מספר שלם>,
-  "remainingYears":        <שנים נותרות, מספר שלם>,
-  "principalRemaining":    <קרן נותרת, מספר שלם>,
-  "interestRemaining":     <ריבית נותרת, מספר שלם>,
-  "tracks": [
-    {
-      "type":            "<שם המסלול>",
-      "balance":         <יתרה, שלם>,
-      "interestRate":    <ריבית, עשרוני>,
-      "remainingMonths": <חודשים נותרים, שלם>,
-      "monthlyPayment":  <החזר חודשי, שלם>
-    }
-  ],
-  "forecast": [
-    { "year": "<YYYY>", "payment": <תשלום חודשי, שלם> }
-  ]
+  "bankName": "<bank name in Hebrew>",
+  "currentBalance": <number>,
+  "originalAmount": <number>,
+  "weightedIRR": <decimal>,
+  "currentMonthlyPayment": <number>,
+  "peakMonthlyPayment": <number>,
+  "remainingYears": <number>,
+  "principalRemaining": <number>,
+  "interestRemaining": <number>,
+  "tracks": [{"type":"<Hebrew name>","balance":<number>,"interestRate":<decimal>,"remainingMonths":<number>,"monthlyPayment":<number>}],
+  "forecast": [{"year":"<YYYY>","payment":<number>}]
 }
 
-חוקים: forecast = שורה לכל שנה עד סיום. JSON תקני בלבד.`;
+forecast: one row per year for next 5 years only. JSON only.`;
+
+function extractFinancialLines(raw: string): string {
+  const cleaned = raw
+    .replace(/[^\u0020-\u007E\u05D0-\u05EA\n]/g, " ")
+    .replace(/[ \t]{2,}/g, " ");
+
+  const lines = cleaned.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  const relevant = lines.filter((l) =>
+    /\d{3,}/.test(l) || // any line with a 3+ digit number
+    /יתרה|ריבית|קרן|מסלול|תשלום|הלוואה|סכום|בנק|פריים|קבועה|משתנה|זכאות|מדד/.test(l)
+  );
+
+  return relevant.slice(0, 100).join("\n").slice(0, 2500);
+}
 
 function cors(origin: string) {
   return {
@@ -52,13 +55,7 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(pdfBase64, "base64");
     const parsed = await pdfParse(buffer);
-    // Clean: remove non-printable chars, collapse whitespace, keep Hebrew+numbers
-    const pdfText = (parsed.text || "")
-      .replace(/[^\u0020-\u007E\u05D0-\u05EA\u200F\u200E\n\r\t]/g, " ")
-      .replace(/[ \t]{2,}/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim()
-      .slice(0, 8000); // Hebrew is ~4 chars/token → ~2000 tokens
+    const pdfText = extractFinancialLines(parsed.text || "");
 
     if (!pdfText) {
       return Response.json(
@@ -75,10 +72,10 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",
-        messages: [{ role: "user", content: PROMPT + "\n\n---\n" + pdfText }],
+        messages: [{ role: "user", content: PROMPT + "\n\nPDF TEXT:\n" + pdfText }],
         temperature: 0.1,
         response_format: { type: "json_object" },
-        max_tokens: 8192,
+        max_tokens: 2048,
       }),
     });
 
