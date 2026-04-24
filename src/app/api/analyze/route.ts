@@ -1,6 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
-
-export const maxDuration = 60;
+export const runtime = "edge";
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY!;
 const GEMINI_URL =
@@ -38,23 +36,35 @@ const PROMPT = `אתה מנתח מסמכי משכנתא ישראליים.
 
 חוקים: forecast = שורה לכל שנה עד סיום. JSON תקני בלבד ללא \`\`\`.`;
 
-export async function POST(request: NextRequest) {
-  const origin = request.headers.get("origin") || "";
-  const corsHeaders = {
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function corsHeaders(origin: string) {
+  return {
     "Access-Control-Allow-Origin": origin || "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
+}
+
+export async function POST(request: Request) {
+  const origin = request.headers.get("origin") || "*";
 
   try {
     const formData = await request.formData();
     const file = formData.get("pdf") as File | null;
 
     if (!file) {
-      return NextResponse.json({ error: "No PDF" }, { status: 400, headers: corsHeaders });
+      return Response.json({ error: "No PDF" }, { status: 400, headers: corsHeaders(origin) });
     }
 
-    const b64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+    const b64 = arrayBufferToBase64(await file.arrayBuffer());
 
     const body = JSON.stringify({
       contents: [{ parts: [
@@ -65,40 +75,33 @@ export async function POST(request: NextRequest) {
     });
 
     let resp!: Response;
-    for (let attempt = 1; attempt <= 4; attempt++) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
       resp = await fetch(GEMINI_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
       });
-      if (resp.status !== 429 || attempt >= 4) break;
-      const wait = parseInt(resp.headers.get("Retry-After") || String(attempt * 20));
+      if (resp.status !== 429 || attempt >= 3) break;
+      const wait = parseInt(resp.headers.get("Retry-After") || String(attempt * 10));
       await new Promise((r) => setTimeout(r, wait * 1000));
     }
 
     if (!resp.ok) {
       const txt = await resp.text();
-      return NextResponse.json({ error: `Gemini ${resp.status}`, details: txt }, { status: 502, headers: corsHeaders });
+      return Response.json({ error: `Gemini ${resp.status}`, details: txt }, { status: 502, headers: corsHeaders(origin) });
     }
 
     const data = await resp.json();
     const raw = data.candidates[0].content.parts[0].text as string;
     const analysis = JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
-    return NextResponse.json(analysis, { headers: corsHeaders });
+    return Response.json(analysis, { headers: corsHeaders(origin) });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500, headers: corsHeaders });
+    return Response.json({ error: String(e) }, { status: 500, headers: corsHeaders(origin) });
   }
 }
 
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS(request: Request) {
   const origin = request.headers.get("origin") || "*";
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-  });
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
 }
