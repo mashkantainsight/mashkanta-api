@@ -52,7 +52,13 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(pdfBase64, "base64");
     const parsed = await pdfParse(buffer);
-    const pdfText = parsed.text?.trim();
+    // Clean: remove non-printable chars, collapse whitespace, keep Hebrew+numbers
+    const pdfText = (parsed.text || "")
+      .replace(/[^\u0020-\u007E\u05D0-\u05EA\u200F\u200E\n\r\t]/g, " ")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+      .slice(0, 30000); // ~7,500 tokens — enough for any mortgage doc
 
     if (!pdfText) {
       return Response.json(
