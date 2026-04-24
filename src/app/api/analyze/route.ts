@@ -60,18 +60,19 @@ export async function POST(request: Request) {
       generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
     });
 
-    let resp!: Response;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      resp = await fetch(GEMINI_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-      });
-      if (resp.status !== 429 || attempt >= 3) break;
-      const wait = parseInt(resp.headers.get("Retry-After") || String(attempt * 15));
-      await new Promise((r) => setTimeout(r, wait * 1000));
-    }
+    const resp = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
 
+    if (resp.status === 429) {
+      const retryAfter = resp.headers.get("Retry-After") || "30";
+      return Response.json(
+        { error: "rate_limit", retryAfter: parseInt(retryAfter) },
+        { status: 429, headers: { ...cors(origin), "Retry-After": retryAfter } }
+      );
+    }
     if (!resp.ok) {
       const txt = await resp.text();
       return Response.json({ error: `Gemini ${resp.status}`, details: txt }, { status: 502, headers: cors(origin) });
