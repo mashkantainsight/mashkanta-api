@@ -15,7 +15,11 @@ import { leadFormSchema, LeadFormValues, BANKS } from '@/lib/schemas';
 
 type SubmitState = 'idle' | 'submitting' | 'error';
 
-export function LeadForm() {
+interface LeadFormProps {
+  onSuccess?: (analysis: Record<string, unknown>) => void;
+}
+
+export function LeadForm({ onSuccess }: LeadFormProps = {}) {
   const router = useRouter();
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [statusMsg, setStatusMsg] = useState('קבל ניתוח משכנתא חינם');
@@ -94,8 +98,12 @@ export function LeadForm() {
         bank: data.bankName,
       };
       analysis._timestamp = new Date().toISOString();
-      localStorage.setItem('mtool_analysis', JSON.stringify(analysis));
-      router.push('/results');
+      if (onSuccess) {
+        onSuccess(analysis as Record<string, unknown>);
+      } else {
+        localStorage.setItem('mtool_analysis', JSON.stringify(analysis));
+        router.push('/results');
+      }
 
     } catch (err) {
       setSubmitState('error');
