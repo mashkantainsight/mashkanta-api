@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         messages: [{ role: "user", content: PROMPT + "\n\n---\n" + pdfText }],
         temperature: 0.1,
         response_format: { type: "json_object" },
-        max_tokens: 4096,
+        max_tokens: 8192,
       }),
     });
 

@@ -66,10 +66,12 @@ export function LeadForm() {
       if (resp.status === 429) {
         throw new Error('השרת עמוס כרגע. אנא המתן מספר דקות ונסה שוב.');
       }
-      if (!resp.ok) throw new Error(`שגיאת שרת ${resp.status}`);
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const analysis: any = await resp.json();
+      const body: any = await resp.json();
+      if (!resp.ok) {
+        throw new Error(body?.details || body?.error || `שגיאת שרת ${resp.status}`);
+      }
+      const analysis = body;
       if (analysis.error) throw new Error(analysis.error);
 
       // Bank mismatch check
