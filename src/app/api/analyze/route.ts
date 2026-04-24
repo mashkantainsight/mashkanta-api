@@ -36,16 +36,7 @@ const PROMPT = `אתה מנתח מסמכי משכנתא ישראליים.
 
 חוקים: forecast = שורה לכל שנה עד סיום. JSON תקני בלבד ללא \`\`\`.`;
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-function corsHeaders(origin: string) {
+function cors(origin: string) {
   return {
     "Access-Control-Allow-Origin": origin || "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -55,20 +46,15 @@ function corsHeaders(origin: string) {
 
 export async function POST(request: Request) {
   const origin = request.headers.get("origin") || "*";
-
   try {
-    const formData = await request.formData();
-    const file = formData.get("pdf") as File | null;
-
-    if (!file) {
-      return Response.json({ error: "No PDF" }, { status: 400, headers: corsHeaders(origin) });
+    const { pdfBase64 } = await request.json() as { pdfBase64: string };
+    if (!pdfBase64) {
+      return Response.json({ error: "No PDF" }, { status: 400, headers: cors(origin) });
     }
-
-    const b64 = arrayBufferToBase64(await file.arrayBuffer());
 
     const body = JSON.stringify({
       contents: [{ parts: [
-        { inline_data: { mime_type: "application/pdf", data: b64 } },
+        { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
         { text: PROMPT },
       ]}],
       generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
@@ -82,26 +68,26 @@ export async function POST(request: Request) {
         body,
       });
       if (resp.status !== 429 || attempt >= 3) break;
-      const wait = parseInt(resp.headers.get("Retry-After") || String(attempt * 10));
+      const wait = parseInt(resp.headers.get("Retry-After") || String(attempt * 15));
       await new Promise((r) => setTimeout(r, wait * 1000));
     }
 
     if (!resp.ok) {
       const txt = await resp.text();
-      return Response.json({ error: `Gemini ${resp.status}`, details: txt }, { status: 502, headers: corsHeaders(origin) });
+      return Response.json({ error: `Gemini ${resp.status}`, details: txt }, { status: 502, headers: cors(origin) });
     }
 
     const data = await resp.json();
     const raw = data.candidates[0].content.parts[0].text as string;
     const analysis = JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
-    return Response.json(analysis, { headers: corsHeaders(origin) });
+    return Response.json(analysis, { headers: cors(origin) });
   } catch (e) {
-    return Response.json({ error: String(e) }, { status: 500, headers: corsHeaders(origin) });
+    return Response.json({ error: String(e) }, { status: 500, headers: cors(origin) });
   }
 }
 
 export async function OPTIONS(request: Request) {
   const origin = request.headers.get("origin") || "*";
-  return new Response(null, { status: 204, headers: corsHeaders(origin) });
+  return new Response(null, { status: 204, headers: cors(origin) });
 }
