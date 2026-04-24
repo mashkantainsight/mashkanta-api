@@ -26,14 +26,7 @@ export function TracksTable({ tracks }: { tracks: MortgageTrack[] }) {
                     <td className="py-3 text-left">
                       <PriceInline amount={t.currentBalance} className="text-gray-700" />
                     </td>
-                    <td className="py-3 text-left">
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-600 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-gray-500">{pct}%</span>
-                      </div>
-                    </td>
+                    <td className="py-3 text-left text-gray-500">{pct}%</td>
                   </tr>
                 );
               })}
