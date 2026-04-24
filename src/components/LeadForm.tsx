@@ -57,32 +57,19 @@ export function LeadForm() {
         reader.readAsDataURL(data.pdf);
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let analysis: any = null;
-      for (let attempt = 0; attempt < 4; attempt++) {
-        const resp = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pdfBase64: b64 }),
-        });
+      const resp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: b64 }),
+      });
 
-        if (resp.status === 429) {
-          const body = await resp.json();
-          const wait: number = body.retryAfter || 30;
-          for (let s = wait; s > 0; s--) {
-            setStatusMsg(`עומס גבוה — ממתין ${s} שניות... ⏳`);
-            await new Promise((r) => setTimeout(r, 1000));
-          }
-          setStatusMsg('מנתח את הדוח... ⏳');
-          continue;
-        }
-
-        if (!resp.ok) throw new Error(`שגיאת שרת ${resp.status}`);
-        analysis = await resp.json();
-        break;
+      if (resp.status === 429) {
+        throw new Error('השרת עמוס כרגע. אנא המתן מספר דקות ונסה שוב.');
       }
+      if (!resp.ok) throw new Error(`שגיאת שרת ${resp.status}`);
 
-      if (!analysis) throw new Error('עומס גבוה — אנא נסה שוב בעוד מספר דקות');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const analysis: any = await resp.json();
       if (analysis.error) throw new Error(analysis.error);
 
       // Bank mismatch check
