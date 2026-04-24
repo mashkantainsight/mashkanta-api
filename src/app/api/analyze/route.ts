@@ -3,35 +3,38 @@ export const runtime = "edge";
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
-const PROMPT = `אתה מנתח מסמכי משכנתא ישראליים.
-המסמך המצורף הוא "אישור יתרות לסילוק" מבנק ישראלי.
-חלץ את כל הנתונים והחזר JSON בלבד — ללא markdown, ללא הסברים.
+const PROMPT = `אתה מנתח מסמכי "אישור יתרות לסילוק" ישראליים.
+קרא את המסמך בעיון ומלא את כל השדות בדיוק לפי הנתונים המופיעים בו.
+החזר JSON בלבד — ללא markdown, ללא הסברים, ללא \`\`\`.
 
 {
-  "bankName":              "<שם הבנק בעברית כפי שמופיע בכותרת>",
-  "currentBalance":        <יתרת קרן נוכחית, מספר שלם>,
-  "originalAmount":        <סכום הלוואה מקורי, מספר שלם>,
-  "weightedIRR":           <ריבית שנתית משוקללת, עשרוני>,
-  "currentMonthlyPayment": <החזר חודשי נוכחי, מספר שלם>,
-  "peakMonthlyPayment":    <החזר חודשי מקסימלי, מספר שלם>,
-  "remainingYears":        <שנים נותרות, מספר שלם>,
-  "principalRemaining":    <קרן נותרת, מספר שלם>,
-  "interestRemaining":     <ריבית נותרת, מספר שלם>,
+  "bankName":              "<שם הבנק בעברית כפי שמופיע בכותרת המסמך>",
+  "originalAmount":        <סכום ההלוואה המקורי המצוין במסמך, מספר שלם בשקלים>,
+  "currentBalance":        <סך יתרת הקרן הכוללת של כל המסלולים, מספר שלם>,
+  "principalRemaining":    <סך יתרת הקרן — זהה ל-currentBalance, מספר שלם>,
+  "interestRemaining":     <סך הריבית הצבורה / ריבית נותרת לתשלום על כל תקופת ההלוואה, מספר שלם>,
+  "weightedIRR":           <ריבית שנתית משוקללת: חשב ממוצע משוקלל של ריביות המסלולים לפי יתרתם. עשרוני, למשל 5.06>,
+  "currentMonthlyPayment": <סך ההחזר החודשי הנוכחי של כל המסלולים יחד, מספר שלם>,
+  "peakMonthlyPayment":    <ההחזר החודשי המקסימלי הצפוי בכל תקופת ההלוואה, מספר שלם>,
+  "remainingYears":        <מספר השנים הנותרות עד לסיום ההלוואה, מספר עשרוני כגון 28.9>,
   "tracks": [
     {
-      "type":            "<שם המסלול>",
-      "balance":         <יתרה, שלם>,
-      "interestRate":    <ריבית, עשרוני>,
-      "remainingMonths": <חודשים נותרים, שלם>,
-      "monthlyPayment":  <החזר חודשי, שלם>
+      "type":            "<שם המסלול בעברית: קבועה לא צמודה / קבועה צמודה / משתנה לא צמודה / משתנה צמודה / פריים / זכאות>",
+      "balance":         <יתרת קרן המסלול, מספר שלם>,
+      "interestRate":    <ריבית שנתית של המסלול, עשרוני>,
+      "remainingMonths": <מספר חודשים נותרים למסלול זה, מספר שלם>,
+      "monthlyPayment":  <החזר חודשי של מסלול זה, מספר שלם>
     }
   ],
   "forecast": [
-    { "year": "<YYYY>", "payment": <תשלום חודשי, שלם> }
+    { "year": "<YYYY>", "payment": <החזר חודשי צפוי באותה שנה, מספר שלם> }
   ]
 }
 
-חוקים: forecast = שורה לכל שנה עד סיום. JSON תקני בלבד ללא \`\`\`.`;
+חוקים:
+- כלול את כל המסלולים שמופיעים במסמך ללא יוצא מן הכלל
+- forecast: שורה אחת לכל שנה קלנדרית מהיום עד תום ההלוואה
+- JSON תקני בלבד, ללא הערות`;
 
 function cors(origin: string) {
   return {
@@ -57,8 +60,8 @@ export async function POST(request: Request) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 2048,
+        model: "claude-sonnet-4-6",
+        max_tokens: 4096,
         messages: [
           {
             role: "user",
