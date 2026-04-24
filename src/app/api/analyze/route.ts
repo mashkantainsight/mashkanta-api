@@ -1,16 +1,16 @@
-export const runtime = "edge";
+import * as pdfParseModule from "pdf-parse";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const pdfParse: (buf: Buffer) => Promise<{ text: string }> = (pdfParseModule as any).default ?? pdfParseModule;
 
-const GEMINI_KEY = process.env.GEMINI_API_KEY!;
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
-  GEMINI_KEY;
+const GROQ_KEY = process.env.GROQ_API_KEY!;
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 const PROMPT = `אתה מנתח מסמכי משכנתא ישראליים.
-המסמך המצורף הוא "אישור יתרות לסילוק" מבנק ישראלי.
+להלן טקסט שחולץ מ"אישור יתרות לסילוק" מבנק ישראלי.
 חלץ את כל הנתונים והחזר JSON בלבד — ללא markdown, ללא הסברים.
 
 {
-  "bankName":              "<שם הבנק בעברית כפי שמופיע בכותרת>",
+  "bankName":              "<שם הבנק בעברית>",
   "currentBalance":        <יתרת קרן נוכחית, מספר שלם>,
   "originalAmount":        <סכום הלוואה מקורי, מספר שלם>,
   "weightedIRR":           <ריבית שנתית משוקללת, עשרוני>,
@@ -23,7 +23,6 @@ const PROMPT = `אתה מנתח מסמכי משכנתא ישראליים.
     {
       "type":            "<שם המסלול>",
       "balance":         <יתרה, שלם>,
-      "pct":             <אחוז מהסך, עשרוני>,
       "interestRate":    <ריבית, עשרוני>,
       "remainingMonths": <חודשים נותרים, שלם>,
       "monthlyPayment":  <החזר חודשי, שלם>
@@ -34,7 +33,7 @@ const PROMPT = `אתה מנתח מסמכי משכנתא ישראליים.
   ]
 }
 
-חוקים: forecast = שורה לכל שנה עד סיום. JSON תקני בלבד ללא \`\`\`.`;
+חוקים: forecast = שורה לכל שנה עד סיום. JSON תקני בלבד.`;
 
 function cors(origin: string) {
   return {
@@ -47,39 +46,44 @@ function cors(origin: string) {
 export async function POST(request: Request) {
   const origin = request.headers.get("origin") || "*";
   try {
-    const { pdfBase64 } = await request.json() as { pdfBase64: string };
+    const { pdfBase64 } = (await request.json()) as { pdfBase64: string };
     if (!pdfBase64) {
       return Response.json({ error: "No PDF" }, { status: 400, headers: cors(origin) });
     }
 
-    const body = JSON.stringify({
-      contents: [{ parts: [
-        { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
-        { text: PROMPT },
-      ]}],
-      generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-    });
+    const buffer = Buffer.from(pdfBase64, "base64");
+    const parsed = await pdfParse(buffer);
+    const pdfText = parsed.text?.trim();
 
-    const resp = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    });
-
-    if (resp.status === 429) {
-      const retryAfter = resp.headers.get("Retry-After") || "30";
+    if (!pdfText) {
       return Response.json(
-        { error: "rate_limit", retryAfter: parseInt(retryAfter) },
-        { status: 429, headers: { ...cors(origin), "Retry-After": retryAfter } }
+        { error: "לא ניתן לחלץ טקסט מהקובץ. האם הקובץ סרוק? אנא נסה PDF מבנק." },
+        { status: 422, headers: cors(origin) }
       );
     }
+
+    const resp = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: PROMPT + "\n\n---\n" + pdfText }],
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+        max_tokens: 4096,
+      }),
+    });
+
     if (!resp.ok) {
       const txt = await resp.text();
-      return Response.json({ error: `Gemini ${resp.status}`, details: txt }, { status: 502, headers: cors(origin) });
+      return Response.json({ error: `Groq ${resp.status}`, details: txt }, { status: 502, headers: cors(origin) });
     }
 
     const data = await resp.json();
-    const raw = data.candidates[0].content.parts[0].text as string;
+    const raw = data.choices[0].message.content as string;
     const analysis = JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
     return Response.json(analysis, { headers: cors(origin) });
