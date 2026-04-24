@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       .replace(/[ \t]{2,}/g, " ")
       .replace(/\n{3,}/g, "\n\n")
       .trim()
-      .slice(0, 30000); // ~7,500 tokens — enough for any mortgage doc
+      .slice(0, 8000); // Hebrew is ~4 chars/token → ~2000 tokens
 
     if (!pdfText) {
       return Response.json(
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
         Authorization: `Bearer ${GROQ_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-8b-instant",
         messages: [{ role: "user", content: PROMPT + "\n\n---\n" + pdfText }],
         temperature: 0.1,
         response_format: { type: "json_object" },
