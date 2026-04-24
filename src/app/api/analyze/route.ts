@@ -1,6 +1,5 @@
-import * as pdfParseModule from "pdf-parse";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const pdfParse: (buf: Buffer) => Promise<{ text: string }> = (pdfParseModule as any).default ?? pdfParseModule;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require("pdf-parse/lib/pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
 
 const GROQ_KEY = process.env.GROQ_API_KEY!;
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
