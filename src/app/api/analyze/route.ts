@@ -1,9 +1,7 @@
 export const runtime = "edge";
 
-const GEMINI_KEY = process.env.GEMINI_API_KEY!;
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
-  GEMINI_KEY;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 const PROMPT = `אתה מנתח מסמכי משכנתא ישראליים.
 המסמך המצורף הוא "אישור יתרות לסילוק" מבנק ישראלי.
@@ -51,21 +49,36 @@ export async function POST(request: Request) {
       return Response.json({ error: "No PDF" }, { status: 400, headers: cors(origin) });
     }
 
-    const body = JSON.stringify({
-      contents: [{ parts: [
-        { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
-        { text: PROMPT },
-      ]}],
-      generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-    });
-
-    const resp = await fetch(GEMINI_URL, {
+    const resp = await fetch(ANTHROPIC_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2048,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: "application/pdf",
+                  data: pdfBase64,
+                },
+              },
+              { type: "text", text: PROMPT },
+            ],
+          },
+        ],
+      }),
     });
 
-    if (resp.status === 429) {
+    if (resp.status === 529 || resp.status === 429) {
       return Response.json(
         { error: "השרת עמוס כרגע. אנא המתן מספר דקות ונסה שוב." },
         { status: 429, headers: cors(origin) }
@@ -74,11 +87,11 @@ export async function POST(request: Request) {
 
     if (!resp.ok) {
       const txt = await resp.text();
-      return Response.json({ error: `Gemini ${resp.status}`, details: txt }, { status: 502, headers: cors(origin) });
+      return Response.json({ error: `Claude ${resp.status}`, details: txt }, { status: 502, headers: cors(origin) });
     }
 
     const data = await resp.json();
-    const raw = data.candidates[0].content.parts[0].text as string;
+    const raw = data.content[0].text as string;
     const analysis = JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
     return Response.json(analysis, { headers: cors(origin) });
