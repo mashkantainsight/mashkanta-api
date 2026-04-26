@@ -159,14 +159,14 @@ export function LeadForm({ onSuccess }: LeadFormProps = {}) {
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
           className={`relative cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition-colors
-            ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50'}
+            ${dragActive ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-amber-400 hover:bg-gray-50'}
             ${errors.pdf ? 'border-red-400' : ''}`}
         >
           <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
             onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} />
           {selectedFile ? (
             <div className="flex items-center justify-center gap-3">
-              <FileText className="h-8 w-8 text-blue-500 shrink-0" />
+              <FileText className="h-8 w-8 shrink-0" style={{ color: '#e8742b' }} />
               <div className="text-right">
                 <p className="font-medium text-gray-800 text-sm">{selectedFile.name}</p>
                 <p className="text-gray-400 text-xs">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
@@ -184,7 +184,7 @@ export function LeadForm({ onSuccess }: LeadFormProps = {}) {
       </div>
 
       <div className="flex items-start gap-3">
-        <input type="checkbox" id="consent" className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-blue-600" {...register('consent')} />
+        <input type="checkbox" id="consent" className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-amber-700" {...register('consent')} />
         <Label htmlFor="consent" className="text-sm font-normal leading-relaxed cursor-pointer">
           אני מאשר/ת שהמידע ישמש לניתוח המשכנתא שלי ויישמר בצורה מאובטחת. לא יועבר לצד שלישי.
         </Label>
@@ -194,7 +194,10 @@ export function LeadForm({ onSuccess }: LeadFormProps = {}) {
       <Button
         type="submit"
         disabled={submitState === 'submitting' || !consent}
-        className="w-full h-12 text-base bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+        className="w-full h-12 text-base disabled:opacity-50"
+        style={{ backgroundColor: '#e8742b' }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#c85f1f')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#e8742b')}
       >
         {submitState === 'submitting' ? (
           <span className="flex items-center gap-2">

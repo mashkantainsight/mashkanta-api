@@ -6,28 +6,28 @@ export function SummaryCards({ data }: { data: MortgageAnalysis }) {
   const principalPct = Math.round((data.principalRemaining / data.totalRemainingPayments) * 100);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
       {/* Main card: donut + totals */}
-      <div className="lg:col-span-2">
-        <Card className="rounded-xl border-0 shadow-sm">
-          <CardContent className="p-5">
-            <div className="flex flex-col sm:flex-row-reverse items-center gap-6">
+      <div className="lg:col-span-2 h-full">
+        <Card className="rounded-xl border-0 shadow-sm h-full">
+          <CardContent className="p-6 h-full flex items-center">
+            <div className="flex flex-col sm:flex-row-reverse items-center gap-6 w-full">
               <div className="shrink-0">
                 <DonutSvg principal={principalPct} />
               </div>
-              <div className="flex-1 text-right space-y-3">
-                <p className="text-sm text-gray-400">סך כל התשלומים הצפויים שנותרו</p>
-                <Price amount={data.totalRemainingPayments} className="text-3xl font-bold text-gray-900" />
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex items-center justify-end gap-2">
-                    <PriceInline amount={data.principalRemaining} className="text-gray-700 font-medium" />
-                    <span className="text-gray-400">:קרן</span>
-                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#1e3a6e' }} />
+              <div className="flex-1 w-full text-center sm:text-right space-y-4">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">סך כל התשלומים הצפויים שנותרו</p>
+                <Price amount={data.totalRemainingPayments} className="text-3xl font-bold text-gray-900 !text-center sm:!text-right" />
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#e8742b' }} />
+                    <span className="text-xs font-medium text-gray-500">:קרן</span>
+                    <PriceInline amount={data.principalRemaining} className="text-gray-800 font-semibold" />
                   </div>
-                  <div className="flex items-center justify-end gap-2">
-                    <PriceInline amount={data.interestRemaining} className="text-gray-700 font-medium" />
-                    <span className="text-gray-400">:ריבית והצמדה</span>
-                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#93c5fd' }} />
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: '#F4B47A' }} />
+                    <span className="text-xs font-medium text-gray-500">:ריבית והצמדה</span>
+                    <PriceInline amount={data.interestRemaining} className="text-gray-800 font-semibold" />
                   </div>
                 </div>
               </div>
@@ -37,17 +37,17 @@ export function SummaryCards({ data }: { data: MortgageAnalysis }) {
       </div>
 
       {/* Side cards: original amount + IRR */}
-      <div className="flex flex-col gap-4">
-        <Card className="rounded-xl border-0 shadow-sm">
-          <CardContent className="p-5 text-right space-y-1">
+      <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
+        <Card className="rounded-xl border-0 shadow-sm ">
+          <CardContent className="p-6 text-center sm:text-right space-y-1 h-full flex flex-col justify-center items-center sm:items-start">
             <Price amount={data.originalAmount} className="text-2xl font-bold text-gray-900" />
-            <p className="text-xs text-gray-400">סכום המשכנתא המקורית</p>
+            <p className="text-xs font-medium text-gray-500">סכום המשכנתא המקורית</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border-0 shadow-sm">
-          <CardContent className="p-5 text-right space-y-1">
+        <Card className="rounded-xl border-0 shadow-sm ">
+          <CardContent className="p-6 text-center sm:text-right space-y-1 h-full flex flex-col justify-center items-center sm:items-start">
             <p className="text-2xl font-bold text-gray-900">{data.weightedIRR.toFixed(2)}%</p>
-            <p className="text-xs text-gray-400">ריבית שנתית משוקללת (IRR)</p>
+            <p className="text-xs font-medium text-gray-500">ריבית שנתית משוקללת (IRR)</p>
           </CardContent>
         </Card>
       </div>
@@ -63,11 +63,11 @@ function DonutSvg({ principal }: { principal: number }) {
 
   return (
     <svg width="160" height="160" viewBox="0 0 160 160">
-      <circle cx="80" cy="80" r={r} fill="none" stroke="#93c5fd" strokeWidth="22" />
+      <circle cx="80" cy="80" r={r} fill="none" stroke="#F4B47A" strokeWidth="22" />
       <circle
         cx="80" cy="80" r={r}
         fill="none"
-        stroke="#1e3a6e"
+        stroke="#e8742b"
         strokeWidth="22"
         strokeDasharray={`${principalDash} ${interestDash}`}
         strokeLinecap="butt"

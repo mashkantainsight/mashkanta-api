@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-heebo);
+  --font-sans: var(--font-assistant);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -60,5 +60,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-assistant), sans-serif;
   }
+}
+
+.font-numeric {
+  font-family: var(--font-arimo), sans-serif;
 }

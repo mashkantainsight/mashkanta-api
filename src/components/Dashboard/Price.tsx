@@ -3,7 +3,7 @@
 export function Price({ amount, className }: { amount: number; className?: string }) {
   const formatted = amount.toLocaleString('he-IL');
   return (
-    <p dir="ltr" className={`text-right ${className ?? ''}`}>
+    <p dir="ltr" className={`font-numeric text-right whitespace-nowrap ${className ?? ''}`}>
       ₪ {formatted}
     </p>
   );
@@ -12,7 +12,7 @@ export function Price({ amount, className }: { amount: number; className?: strin
 export function PriceInline({ amount, className }: { amount: number; className?: string }) {
   const formatted = amount.toLocaleString('he-IL');
   return (
-    <span dir="ltr" className={className}>
+    <span dir="ltr" className={`font-numeric ${className ?? ''}`}>
       ₪ {formatted}
     </span>
   );

@@ -30,3 +30,15 @@ export type MortgageAnalysis = {
   peakMonthlyPayment: number;
   forecast: Array<{ month: string; payment: number }>;
 };
+
+export type Lead = {
+  id: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+  bankName: string;
+  pdfUrl?: string;
+  analysis?: MortgageAnalysis;
+  status: 'pending' | 'analyzing' | 'done' | 'error';
+  createdAt: string;
+};
