@@ -23,7 +23,6 @@ export function BottomStats({ data }: { data: MortgageAnalysis }) {
           <p className="text-xs font-medium text-gray-500">החזר חודשי צפוי</p>
         </CardContent>
       </Card>
-      {/* 4th card — mobile only to complete 2×2 grid */}
       <Card className="rounded-xl border-0 shadow-sm sm:hidden">
         <CardContent className="p-4 text-center space-y-1 flex flex-col items-center">
           <p className="text-lg font-bold text-gray-900"><span className="font-numeric">{data.weightedIRR.toFixed(2)}%</span></p>

@@ -17,7 +17,7 @@ export const leadFormSchema = z.object({
     .string()
     .min(9, 'מספר טלפון לא תקין')
     .regex(/^0[2-9]\d{7,8}$/, 'מספר טלפון לא תקין'),
-  email: z.string().email('כתובת מייל לא תקינה').optional().or(z.literal('')),
+  email: z.string().email('כתובת מייל לא תקינה'),
   bankName: z.enum(BANKS, { error: 'נא לבחור בנק' }),
   pdf: z
     .instanceof(File, { message: 'נא להעלות קובץ PDF' })

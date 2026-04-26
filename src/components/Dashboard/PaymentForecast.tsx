@@ -30,7 +30,7 @@ export function PaymentForecast({ data }: { data: MortgageAnalysis }) {
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 text-center">צפי החזרים חודשיים</p>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 16, bottom: 24 }}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 24 }}>
               <defs>
                 <linearGradient id="payGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#F4B47A" stopOpacity={0.45} />
@@ -43,16 +43,16 @@ export function PaymentForecast({ data }: { data: MortgageAnalysis }) {
                 tick={{ fontSize: 11, fill: '#9ca3af' }}
                 tickLine={false}
                 axisLine={false}
+                interval={1}
                 label={{ value: 'שנים', position: 'insideBottom', offset: -12, fontSize: 11, fill: '#9ca3af' }}
               />
               <YAxis
                 tick={{ fontSize: 11, fill: '#9ca3af' }}
                 tickLine={false}
                 axisLine={false}
-                domain={['auto', 'auto']}
+                domain={[0, 'auto']}
                 tickFormatter={(v) => v.toLocaleString('he-IL')}
                 width={58}
-                label={{ value: 'החזר חודשי צפוי', angle: -90, position: 'insideLeft', offset: 8, fontSize: 11, fill: '#9ca3af' }}
               />
               <Tooltip
                 formatter={(v) => [`₪ ${Number(v).toLocaleString('he-IL')}`, 'החזר חודשי']}

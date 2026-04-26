@@ -3,37 +3,28 @@ export const runtime = "edge";
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
-const PROMPT = `אתה מחלץ נתונים ממסמך "אישור יתרות לסילוק" של בנק ישראלי.
-עליך לחלץ את טבלת המסלולים במדויק. במסמך יש טבלה עם עמודות. חלץ כל שורה.
-החזר JSON בלבד ללא markdown ללא \`\`\`.
+const PROMPT = `חלץ נתונים ממסמך "אישור יתרות לסילוק" ישראלי. החזר JSON בלבד ללא markdown.
 
 {
   "bankName": "<שם הבנק>",
-  "originalAmount": <סכום ההלוואה המקורי הכולל של כל ההלוואה כפי שמצוין במסמך, מספר שלם>,
+  "originalAmount": <סכום הלוואה מקורי כולל, מספר שלם>,
   "tracks": [
     {
-      "type": "<סוג מסלול — חובה להיות אחד מהערכים הבאים בדיוק: 'זכאות' / 'פריים' / 'קבועה לא צמודה' / 'קבועה צמודה' / 'משתנה לא צמודה' / 'משתנה צמודה'>",
-      "balance": <יתרת קרן נוכחית של מסלול זה — העמודה "יתרת קרן" או "יתרה לסילוק". מספר שלם>,
-      "originalAmount": <סכום ההלוואה המקורי של מסלול זה. מספר שלם>,
-      "interestRate": <ריבית שנתית של מסלול זה כמספר עשרוני. לדוגמה 4.5 ולא 0.045>,
-      "remainingMonths": <מספר חודשים שנותרו עד סיום. מחשב לפי תאריך סיום מינוס היום. מספר שלם חיובי. לדוגמה: 346 חודשים>
+      "type": "<'זכאות' | 'פריים' | 'קבועה לא צמודה' | 'קבועה צמודה' | 'משתנה לא צמודה' | 'משתנה צמודה'>",
+      "balance": <יתרת קרן נוכחית, מספר שלם>,
+      "originalAmount": <סכום מקורי של מסלול זה, מספר שלם>,
+      "interestRate": <ריבית שנתית עשרונית, לדוגמה 4.5>,
+      "remainingMonths": <חודשים שנותרו לפי תאריך סיום, מספר שלם>
     }
   ]
 }
 
-חוקים חשובים מאוד:
-1. זיהוי סוג מסלול — קרא בדיוק מהטבלה:
-   - "זכאות" (entitlement / משרד השיכון) → 'זכאות'
-   - "פריים" (Prime) → 'פריים'
-   - "קבועה לא צמודה" → 'קבועה לא צמודה' — שים לב ל"לא"
-   - "קבועה צמודה למדד" → 'קבועה צמודה'
-   - "משתנה לא צמודה" → 'משתנה לא צמודה' — שים לב ל"לא"
-   - "משתנה צמודה למדד" → 'משתנה צמודה'
-2. אל תמיר "זכאות" לסוג אחר.
-3. אל תשמיט את המילה "לא" — ההבדל בין "קבועה צמודה" ל"קבועה לא צמודה" קריטי.
-4. remainingMonths — חשב לפי תאריך סיום המסלול. אם תאריך הסיום הוא 2055, ועכשיו 2026, זה כ-348 חודשים.
-5. interestRate — ריבית שנתית. לדוגמה: 4.5 (לא 0.045).
-6. חובה לכלול את כל המסלולים — ספור את שורות הטבלה.`;
+כללים:
+- type — חובה להשתמש בדיוק בערכים המותרים. שים לב ל"לא" בקבועה/משתנה לא צמודה.
+- אל תמיר "זכאות" לסוג אחר.
+- remainingMonths — חשב מתאריך סיום מינוס היום בחודשים.
+- interestRate — שנתית כמספר (4.5 ולא 0.045).
+- כלול את כל שורות הטבלה.`;
 
 function cors(origin: string) {
   return {
@@ -57,7 +48,6 @@ type RawAnalysis = {
   tracks: RawTrack[];
 };
 
-// Standard Spitzer (שפיצר) monthly payment formula
 function spitzerPayment(balance: number, annualRate: number, months: number): number {
   if (months <= 0 || balance <= 0) return 0;
   const r = annualRate / 100 / 12;
@@ -66,43 +56,31 @@ function spitzerPayment(balance: number, annualRate: number, months: number): nu
 }
 
 function enrichAnalysis(raw: RawAnalysis) {
-  const tracks = (raw.tracks || []).filter((t) => t && t.balance > 0 && t.remainingMonths > 0);
+  const tracks = (raw.tracks || [])
+    .filter((t) => t && t.balance > 0 && t.remainingMonths > 0)
+    .map((t) => ({
+      ...t,
+      currentBalance: t.balance,
+      monthlyPayment: spitzerPayment(t.balance, t.interestRate, t.remainingMonths),
+    }));
 
-  // Compute monthly payment per track using Spitzer formula
-  const enrichedTracks = tracks.map((t) => ({
-    ...t,
-    currentBalance: t.balance,
-    monthlyPayment: spitzerPayment(t.balance, t.interestRate, t.remainingMonths),
-  }));
-
-  const principalRemaining = Math.round(enrichedTracks.reduce((s, t) => s + t.balance, 0));
-  const currentMonthlyPayment = Math.round(enrichedTracks.reduce((s, t) => s + t.monthlyPayment, 0));
-
+  const principalRemaining = Math.round(tracks.reduce((s, t) => s + t.balance, 0));
+  const currentMonthlyPayment = Math.round(tracks.reduce((s, t) => s + t.monthlyPayment, 0));
   const interestRemaining = Math.round(
-    enrichedTracks.reduce((s, t) => s + Math.max(0, t.monthlyPayment * t.remainingMonths - t.balance), 0)
+    tracks.reduce((s, t) => s + Math.max(0, t.monthlyPayment * t.remainingMonths - t.balance), 0)
   );
-  const totalRemainingPayments = principalRemaining + interestRemaining;
-
   const weightedIRR = principalRemaining > 0
-    ? Math.round((enrichedTracks.reduce((s, t) => s + t.interestRate * t.balance, 0) / principalRemaining) * 100) / 100
+    ? Math.round((tracks.reduce((s, t) => s + t.interestRate * t.balance, 0) / principalRemaining) * 100) / 100
     : 0;
 
-  const maxMonths = Math.max(0, ...enrichedTracks.map((t) => t.remainingMonths));
-  const remainingYears = Math.round((maxMonths / 12) * 10) / 10;
-
+  const maxMonths = Math.max(0, ...tracks.map((t) => t.remainingMonths));
   const currentYear = new Date().getFullYear();
-  const years = Math.ceil(maxMonths / 12);
-  const forecast: Array<{ year: string; payment: number }> = [];
-  for (let y = 0; y < years; y++) {
-    const monthsElapsed = y * 12;
-    const payment = Math.round(
-      enrichedTracks
-        .filter((t) => t.remainingMonths > monthsElapsed)
-        .reduce((s, t) => s + t.monthlyPayment, 0)
-    );
-    forecast.push({ year: String(currentYear + y), payment });
-  }
-  const peakMonthlyPayment = Math.max(currentMonthlyPayment, ...forecast.map((f) => f.payment));
+  const forecast = Array.from({ length: Math.ceil(maxMonths / 12) }, (_, y) => ({
+    year: String(currentYear + y),
+    payment: Math.round(
+      tracks.filter((t) => t.remainingMonths > y * 12).reduce((s, t) => s + t.monthlyPayment, 0)
+    ),
+  }));
 
   return {
     bankName: raw.bankName,
@@ -110,12 +88,12 @@ function enrichAnalysis(raw: RawAnalysis) {
     currentBalance: principalRemaining,
     principalRemaining,
     interestRemaining,
-    totalRemainingPayments,
+    totalRemainingPayments: principalRemaining + interestRemaining,
     weightedIRR,
     currentMonthlyPayment,
-    peakMonthlyPayment,
-    remainingYears,
-    tracks: enrichedTracks,
+    peakMonthlyPayment: Math.max(currentMonthlyPayment, ...forecast.map((f) => f.payment)),
+    remainingYears: Math.round((maxMonths / 12) * 10) / 10,
+    tracks,
     forecast,
   };
 }
@@ -124,9 +102,7 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin") || "*";
   try {
     const { pdfBase64 } = (await request.json()) as { pdfBase64: string };
-    if (!pdfBase64) {
-      return Response.json({ error: "No PDF" }, { status: 400, headers: cors(origin) });
-    }
+    if (!pdfBase64) return Response.json({ error: "No PDF" }, { status: 400, headers: cors(origin) });
 
     const resp = await fetch(ANTHROPIC_URL, {
       method: "POST",
@@ -139,62 +115,44 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 4096,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "document",
-                source: {
-                  type: "base64",
-                  media_type: "application/pdf",
-                  data: pdfBase64,
-                },
-              },
-              { type: "text", text: PROMPT },
-            ],
-          },
-        ],
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+            { type: "text", text: PROMPT },
+          ],
+        }],
       }),
     });
 
-    if (resp.status === 529 || resp.status === 429) {
-      return Response.json(
-        { error: "השרת עמוס כרגע. אנא המתן מספר דקות ונסה שוב." },
-        { status: 429, headers: cors(origin) }
-      );
-    }
+    if (resp.status === 529 || resp.status === 429)
+      return Response.json({ error: "השרת עמוס כרגע. אנא המתן מספר דקות ונסה שוב." }, { status: 429, headers: cors(origin) });
 
     if (!resp.ok) {
       const txt = await resp.text();
       return Response.json({ error: `Claude ${resp.status}`, details: txt.slice(0, 500) }, { status: 502, headers: cors(origin) });
     }
 
-    const data = await resp.json();
-    const rawText = data?.content?.[0]?.text;
-    if (typeof rawText !== "string") {
-      return Response.json({ error: "Unexpected Claude response", details: JSON.stringify(data).slice(0, 500) }, { status: 502, headers: cors(origin) });
-    }
+    const rawText = (await resp.json())?.content?.[0]?.text;
+    if (typeof rawText !== "string")
+      return Response.json({ error: "Unexpected Claude response" }, { status: 502, headers: cors(origin) });
 
     let parsed: RawAnalysis;
     try {
       const cleaned = rawText.replace(/```json|```/gi, "").trim();
       const first = cleaned.indexOf("{");
       const last = cleaned.lastIndexOf("}");
-      const jsonStr = first >= 0 && last > first ? cleaned.slice(first, last + 1) : cleaned;
-      parsed = JSON.parse(jsonStr);
+      parsed = JSON.parse(first >= 0 && last > first ? cleaned.slice(first, last + 1) : cleaned);
     } catch {
       return Response.json({ error: "JSON parse failed", details: rawText.slice(0, 500) }, { status: 502, headers: cors(origin) });
     }
 
-    const analysis = enrichAnalysis(parsed);
-    return Response.json(analysis, { headers: cors(origin) });
+    return Response.json(enrichAnalysis(parsed), { headers: cors(origin) });
   } catch (e) {
     return Response.json({ error: String(e) }, { status: 500, headers: cors(origin) });
   }
 }
 
 export async function OPTIONS(request: Request) {
-  const origin = request.headers.get("origin") || "*";
-  return new Response(null, { status: 204, headers: cors(origin) });
+  return new Response(null, { status: 204, headers: cors(request.headers.get("origin") || "*") });
 }

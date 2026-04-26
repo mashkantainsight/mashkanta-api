@@ -32,9 +32,10 @@ function Logo() {
   );
 }
 
-function normalizeAnalysis(raw: Record<string, unknown>): MortgageAnalysis {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tracks = ((raw.tracks as any[]) || []).map((t: any) => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeAnalysis(raw: any): MortgageAnalysis {
+  const n = (v: unknown, fb = 0) => (v as number) ?? fb;
+  const tracks = (raw.tracks ?? []).map((t: any) => ({
     type: t.type,
     originalAmount: t.originalAmount ?? t.balance ?? 0,
     currentBalance: t.currentBalance ?? t.balance ?? 0,
@@ -43,45 +44,49 @@ function normalizeAnalysis(raw: Record<string, unknown>): MortgageAnalysis {
     linkageIndex: t.linkageIndex,
     rateResetMonths: t.rateResetMonths,
   }));
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const forecast = ((raw.forecast as any[]) || []).map((f: any) => ({
+  const forecast = (raw.forecast ?? []).map((f: any) => ({
     month: f.month ?? String(f.year ?? ''),
     payment: f.payment ?? 0,
   }));
-
-  const principalRemaining = (raw.principalRemaining as number) ?? (raw.currentBalance as number) ?? 0;
-  const interestRemaining = (raw.interestRemaining as number) ?? 0;
-
+  const principalRemaining = n(raw.principalRemaining ?? raw.currentBalance);
+  const interestRemaining = n(raw.interestRemaining);
   return {
-    bankName: raw.bankName as string | undefined,
-    originalAmount: (raw.originalAmount as number) ?? 0,
-    currentBalance: (raw.currentBalance as number) ?? principalRemaining,
-    weightedIRR: (raw.weightedIRR as number) ?? 0,
+    bankName: raw.bankName,
+    originalAmount: n(raw.originalAmount),
+    currentBalance: n(raw.currentBalance ?? principalRemaining),
+    weightedIRR: n(raw.weightedIRR),
     tracks,
-    totalRemainingPayments: (raw.totalRemainingPayments as number) ?? (principalRemaining + interestRemaining),
+    totalRemainingPayments: n(raw.totalRemainingPayments, principalRemaining + interestRemaining),
     principalRemaining,
     interestRemaining,
-    remainingYears: (raw.remainingYears as number) ?? 0,
-    currentMonthlyPayment: (raw.currentMonthlyPayment as number) ?? 0,
-    peakMonthlyPayment: (raw.peakMonthlyPayment as number) ?? 0,
+    remainingYears: n(raw.remainingYears),
+    currentMonthlyPayment: n(raw.currentMonthlyPayment),
+    peakMonthlyPayment: n(raw.peakMonthlyPayment),
     forecast,
   };
+}
+
+function timeGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'בוקר טוב';
+  if (h < 17) return 'צהריים טובים';
+  if (h < 21) return 'ערב טוב';
+  return 'לילה טוב';
 }
 
 export default function ResultsPage() {
   const router = useRouter();
   const [analysis, setAnalysis] = useState<MortgageAnalysis | null>(null);
+  const [firstName, setFirstName] = useState('');
   const today = new Date().toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   useEffect(() => {
     const raw = localStorage.getItem('mtool_analysis');
-    if (!raw) {
-      router.replace('/');
-      return;
-    }
+    if (!raw) { router.replace('/'); return; }
     try {
-      setAnalysis(normalizeAnalysis(JSON.parse(raw)));
+      const parsed = JSON.parse(raw);
+      setFirstName(parsed._user?.firstName ?? '');
+      setAnalysis(normalizeAnalysis(parsed));
     } catch {
       router.replace('/');
     }
@@ -106,11 +111,17 @@ export default function ResultsPage() {
       <main className="flex-1 py-8 px-4">
         <div className="max-w-[800px] mx-auto flex flex-col gap-4">
 
-          {/* Hero card */}
-          <div className="order-1 rounded-xl bg-[#FEF3EC] px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-8">
-            <p className="text-base sm:text-xl font-extrabold text-[#e8742b] text-right leading-snug">
-              המספרים שלפניכם שווים כסף<br />בואו נעשה איתם משהו.
-            </p>
+          <div className="order-1 rounded-xl bg-[#FEF3EC] px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-8">
+            <div className="text-right">
+              {firstName && (
+                <p className="text-sm font-semibold text-[#e8742b] mb-0.5">
+                  שלום {firstName}, {timeGreeting()}
+                </p>
+              )}
+              <p className="text-base sm:text-xl font-extrabold text-gray-800 leading-snug">
+                המספרים שלפניכם שווים כסף<br />בואו נעשה איתם משהו.
+              </p>
+            </div>
             <p className="hidden sm:block text-xs text-gray-400 shrink-0">
               {analysis.bankName ? `${analysis.bankName} · ` : ''}המשכנתא שלך · {today}
             </p>
@@ -123,7 +134,7 @@ export default function ResultsPage() {
             <div className="order-5"><PaymentForecast data={analysis} /></div>
           )}
 
-          <div className="order-6 rounded-xl bg-[#FEF3EC] px-6 py-6 text-center sm:text-right">
+          <div className="order-6 rounded-xl bg-[#FEF3EC] px-6 py-6 text-center">
             <p className="text-base sm:text-xl font-bold text-[#e8742b] leading-relaxed">
               כל חודש אתם משלמים יותר ממה שצריך. בואו נשנה את זה.
             </p>
